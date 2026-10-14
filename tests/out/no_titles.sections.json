@@ -1,0 +1,17 @@
+[
+ {
+  "title": "Market overview",
+  "slides": [
+   1,
+   2
+  ],
+  "markdown": "<!-- slide 1 -->\n\n# Market overview\n\n## Highlights\n\nDemand grew in all segments.\n\n<!-- slide 2 -->\n\n## Highlights\n\nTwo new competitors entered."
+ },
+ {
+  "title": "Outlook",
+  "slides": [
+   3
+  ],
+  "markdown": "<!-- slide 3 -->\n\n# Outlook\n\nModerate growth through FY27."
+ }
+]

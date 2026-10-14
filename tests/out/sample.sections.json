@@ -1,0 +1,47 @@
+[
+ {
+  "title": "Q3 Business Review",
+  "slides": [
+   1
+  ],
+  "markdown": "<!-- slide 1 -->\n\n# Q3 Business Review\n\n## Finance & Operations"
+ },
+ {
+  "title": "Quarter at a glance",
+  "slides": [
+   2
+  ],
+  "markdown": "<!-- slide 2 -->\n\n# Quarter at a glance\n\n$4.2M\n\nRevenue\n\n35%\n\nGross margin\n\n+12% YoY\n\nGrowth\n\n## Key drivers\n\nEnterprise renewals closed early.\n\nPricing change in APAC lifted margin."
+ },
+ {
+  "title": "Risks and mitigations",
+  "slides": [
+   3
+  ],
+  "markdown": "<!-- slide 3 -->\n\n# Risks and mitigations\n\n## Key drivers\n\nSupplier concentration in one region.\n\n## Mitigations\n\nDual-source critical parts by Q1.\n\nSource: internal finance data, unaudited."
+ },
+ {
+  "title": "Next steps",
+  "slides": [
+   4
+  ],
+  "markdown": "<!-- slide 4 -->\n\n# Next steps\n\n- Finalise FY plan\n  - Budget sign-off\n  - Headcount\n- Launch partner pilot"
+ },
+ {
+  "title": "Regional performance",
+  "slides": [
+   5,
+   6,
+   7,
+   8
+  ],
+  "markdown": "<!-- slide 5 -->\n\n# Regional performance\n\n## Mitigations\n\nHedging FX exposure in LATAM.\n\n<table><tr><th>Region</th><th>Q2</th><th>Q3</th></tr><tr><td>EMEA</td><td>1.1</td><td>1.3</td></tr><tr><td>APAC (merged)</td><td colspan=\"2\">n/a</td></tr></table>\n\n**Chart (COLUMN_CLUSTERED): Revenue by quarter ($M)**\n\n<table><tr><th></th><th>Revenue</th></tr><tr><td>Q1</td><td>3.1</td></tr><tr><td>Q2</td><td>3.8</td></tr><tr><td>Q3</td><td>4.2</td></tr></table>\n\n<!-- slide 6 -->\n\n## Mitigations\n\nRenegotiate supplier terms in Brazil.\n\n<!-- slide 7 -->\n\nAPAC recovery expected in Q4.\n\n<!-- slide 8 -->\n\nEMEA flat; no change to guidance."
+ },
+ {
+  "title": "Appendix",
+  "slides": [
+   9
+  ],
+  "markdown": "<!-- slide 9 -->\n\n# Appendix\n\nDefinitions and data sources."
+ }
+]
