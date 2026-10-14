@@ -24,6 +24,7 @@ from .ooxml import (
     TITLE_TYPES,
     StyleContext,
     auto_number_start,
+    autofit_scale,
     paragraph_level,
     paragraph_style,
     paragraph_text,
@@ -84,6 +85,7 @@ class _Walker:
             shape_name=shape.name,
             shape_key=f"{slide_no}:{shape.shape_id}",
             placeholder=ph,
+            font_scale=autofit_scale(shape) if getattr(shape, "has_text_frame", False) else 1.0,
             **kw,
         )
 
