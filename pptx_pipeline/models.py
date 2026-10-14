@@ -35,6 +35,7 @@ class Element:
 
     # Effective (inherited) text style, used by the heading stage
     font_size: Optional[float] = None  # points, after autofit scaling
+    font_scale: float = 1.0  # shrink-to-fit factor applied to font_size
     bold: bool = False
     caps: bool = False
 

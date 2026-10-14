@@ -8,7 +8,9 @@ recursive XY-cut over shapes fixes this:
   but never at a band directly below a heading, so a heading stays with the
   content under it;
 * when no such band exists, split at the widest vertical band (columns);
-* when nothing can be split (overlapping shapes), keep Docling's order.
+* when nothing can be split (overlapping shapes), keep Docling's order;
+* full-slide backdrops are set aside first, and pictures lying on text follow
+  that text, so neither blocks the cuts.
 """
 
 from __future__ import annotations
@@ -27,6 +29,18 @@ class _Unit:
     bbox: BBox
     first_order: int
     heading_last: bool  # the shape ends with a heading, so what is below belongs to it
+    is_picture: bool = False
+
+
+_BACKGROUND_FRACTION = 0.5  # a unit covering this much of the slide is a backdrop
+
+
+def _area(b: BBox) -> int:
+    return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
+
+
+def _overlap(a: BBox, b: BBox) -> int:
+    return max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
 
 
 def _best_cut(units: list[_Unit], axis: int) -> tuple[int, float] | None:
@@ -80,9 +94,32 @@ def refine_reading_order(deck: Deck) -> Deck:
                     bbox=group[0].bbox,
                     first_order=group[0].order,
                     heading_last=group[-1].kind == "heading",
+                    is_picture=group[0].kind == "picture",
                 )
             )
-        for unit in _xy_cut(units):
+
+        # Shapes that overlap everything leave no whitespace to cut at: a
+        # full-slide background picture or panel would switch the XY-cut off
+        # for the whole slide. They go first, and pictures lying on top of
+        # text (icons, decorations) follow the text unit they overlap most.
+        slide_area = deck.slide_width * deck.slide_height
+        background = [u for u in units if _area(u.bbox) >= _BACKGROUND_FRACTION * slide_area]
+        foreground = [u for u in units if u not in background]
+        texts = [u for u in foreground if not u.is_picture]
+        attached: dict[str, list[_Unit]] = defaultdict(list)
+        layout = []
+        for u in foreground:
+            host = max(texts, key=lambda t: _overlap(t.bbox, u.bbox), default=None) if u.is_picture else None
+            if host is not None and _overlap(host.bbox, u.bbox) > 0:
+                attached[host.key].append(u)
+            else:
+                layout.append(u)
+
+        ordered = sorted(background, key=lambda u: u.first_order)
+        for unit in _xy_cut(layout):
+            ordered.append(unit)
+            ordered.extend(sorted(attached[unit.key], key=lambda u: u.first_order))
+        for unit in ordered:
             out.extend(by_key[unit.key])
         out.extend(sorted(rest, key=lambda e: e.order))
 

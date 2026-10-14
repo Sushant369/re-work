@@ -21,16 +21,30 @@ from typing import Optional
 
 from .models import Deck, Element
 
-_CONTINUATION = re.compile(
-    r"""[\s\-–—:,|]*(
+_SEP = r"[\s\-–—:,|]*"
+_CONT_WORD = re.compile(
+    _SEP + r"""(?:
         [(\[]\s*(?:cont(?:inued|inue|'d|d|\.)?|contd\.?)\s*[)\]]   # (cont.) (continued) [contd]
-      | (?:cont(?:inued|'d|d)?|contd)\.?                          # - continued / cont'd
-      | [(\[]?\s*(?:part\s*)?\d+\s*(?:/|of)\s*\d+\s*[)\]]?        # (2/3)  2 of 3  part 2 of 3
-      | [(\[]?\s*part\s*\d+\s*[)\]]?                              # part 2
-      | [(\[]\s*\d+\s*[)\]]                                       # (2)
+      | \b(?:cont(?:inued|'d|d)?|contd)\.?                        # - continued / cont'd
     )\s*$""",
     re.IGNORECASE | re.VERBOSE,
 )
+# "(1/2)", "2 of 3", "part 2 of 3": page numbering, not part of a larger number
+# ("Plan 2025/26" is a fiscal year, not page 25 of 26).
+_PAGE = re.compile(
+    _SEP + r"[(\[]?\s*(?:part\s*)?(?<![\w/.])(\d{1,2})\s*(?:/|of)\s*(\d{1,2})(?![\w/.])\s*[)\]]?\s*$",
+    re.IGNORECASE,
+)
+_PART = re.compile(_SEP + r"[(\[]?\s*\bpart\s*\d{1,2}\s*[)\]]?\s*$", re.IGNORECASE)
+# Deliberately not markers: a bare "(2)" or "2" ("Wave (1)" / "Wave (2)", "Phase 2")
+# usually names a different topic.
+
+
+def _strip_once(title: str) -> str:
+    m = _PAGE.search(title)
+    if m and 1 <= int(m.group(1)) <= int(m.group(2)) <= 20:
+        return title[: m.start()]
+    return _PART.sub("", _CONT_WORD.sub("", title))
 
 
 def strip_continuation(title: str) -> str:
@@ -38,7 +52,7 @@ def strip_continuation(title: str) -> str:
     prev = None
     title = title.strip()
     while prev != title:
-        prev, title = title, _CONTINUATION.sub("", title).strip()
+        prev, title = title, _strip_once(title).strip()
     return title or prev
 
 

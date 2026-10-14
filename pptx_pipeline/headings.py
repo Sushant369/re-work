@@ -39,6 +39,8 @@ class HeadingConfig:
     strong_size_ratio: float = 1.3  # a one-off style this emphatic (and bold) is still a heading
     max_heading_words: int = 12
     max_heading_chars: int = 90
+    max_title_words: int = 30  # fallback titles may be full sentences
+    max_title_chars: int = 250
     min_support: Optional[int] = None  # slides a style must appear on; default 2 (1 for tiny decks)
     kpi_label_gap_in: float = 0.6  # a short text this close to a KPI is its label
     fallback_title_zone: float = 0.25  # top fraction of the slide searched when there is no title placeholder
@@ -48,26 +50,43 @@ class HeadingConfig:
 Arbiter = Callable[[list[dict]], dict[str, str]]
 
 _KPI_TOKEN = re.compile(r"^[+\-−~≈<>]?[$€£¥₹]?\d[\d,.]*\s*(%|x|×|k|m|bn|mn|b|cr|pp|bps|pts)?\+?$", re.I)
+# Years and reporting periods read as words, not figures: "2025 Strategy", "FY26 plan", "Q3".
+_PERIOD_TOKEN = re.compile(
+    r"\b(?:(?:19|20)\d{2}(?:[/\-–](?:\d{4}|\d{2}))?|[FC]Y\s?\d{2,4}|[QH][1-4])\b", re.I
+)
 _TRAILING_PUNCT = (".", ",", ";", "!")
 
 
 def is_kpi(text: str) -> bool:
-    """A numeric call-out: mostly digits, or a short text led by a number token."""
-    stripped = text.strip()
-    alnum = [c for c in stripped if c.isalnum()]
-    if not alnum or not any(c.isdigit() for c in alnum):
+    """A numeric call-out: mostly digits, or a short text led by a *decorated* number.
+
+    "$4.2M", "35%", "+12% YoY", "500+ clients" and "3x faster" are KPIs.
+    "3 Key Risks", "100 Day Plan" and "2025 Strategy" are not: a bare integer
+    followed by words, and years or periods, are ordinary heading text.
+    """
+    core = _PERIOD_TOKEN.sub(" ", text.strip())
+    alnum = [c for c in core if c.isalnum()]
+    digits = sum(c.isdigit() for c in alnum)
+    if not digits:
         return False
-    if sum(c.isdigit() for c in alnum) / len(alnum) >= 0.5:
+    if digits / len(alnum) >= 0.5:
         return True
-    tokens = stripped.split()
-    return len(tokens) <= 3 and bool(_KPI_TOKEN.match(tokens[0]))
+    tokens = core.split()
+    return len(tokens) <= 3 and bool(_KPI_TOKEN.match(tokens[0])) and not tokens[0].isdigit()
 
 
-def _body_baseline(elements: list[Element]) -> tuple[float, bool]:
-    """Character-weighted median size and majority boldness of the deck's body text."""
+def _body_baseline(elements: list[Element], exclude: set[int]) -> tuple[float, bool]:
+    """Character-weighted median size and majority boldness of the deck's body text.
+
+    ``exclude`` holds ids of elements that may be titles (top text on slides
+    without a title placeholder); long sentence titles would otherwise pull the
+    baseline up to their own size.
+    """
     weighted: list[float] = []
     bold_chars = total = 0
     for e in elements:
+        if id(e) in exclude:
+            continue
         if e.kind in ("paragraph", "list_item") and e.font_size and not is_kpi(e.text):
             n = len(e.text)
             weighted.extend([e.font_size] * min(n, 500))
@@ -84,13 +103,17 @@ def _emphasised(e: Element, ref_size: float, ref_bold: bool, cfg: HeadingConfig)
 
 
 def _signature(e: Element) -> tuple[int, bool]:
-    return (round(e.font_size or 0), e.bold)
+    """The style as designed: shrink-to-fit varies per slide, so it is undone here."""
+    return (round((e.font_size or 0) / (e.font_scale or 1.0)), e.bold)
 
 
 def classify(deck: Deck, cfg: Optional[HeadingConfig] = None, arbitrate: Optional[Arbiter] = None) -> Deck:
     cfg = cfg or HeadingConfig()
     body = [e for e in deck.elements if e.layer == "body"]
-    baseline_size, baseline_bold = _body_baseline(body)
+    zone = deck.slide_height * cfg.fallback_title_zone
+    titled = {e.slide for e in body if e.kind == "title"}
+    maybe_titles = {id(e) for e in body if e.slide not in titled and e.bbox[1] <= zone}
+    baseline_size, baseline_bold = _body_baseline(body, maybe_titles)
 
     by_slide: dict[int, list[Element]] = defaultdict(list)
     by_shape: dict[str, list[Element]] = defaultdict(list)
@@ -103,17 +126,27 @@ def classify(deck: Deck, cfg: Optional[HeadingConfig] = None, arbitrate: Optiona
     kpis = [e for e in body if e.kind == "paragraph" and is_kpi(e.text)]
     for e in kpis:
         e.kind, e.reason = "kpi", "kpi:numeric"
+    # A KPI has at most one label: short text in its own box, or else the
+    # nearest short text just above/below it in its column. A larger-than-body
+    # text that is not tight against the KPI is a heading under the KPI row.
     gap = cfg.kpi_label_gap_in * EMU_PER_INCH
-    for e in body:
-        if e.kind != "paragraph" or e.words > 6:
+    tight = EMU_PER_INCH * 0.25
+    for k in kpis:
+        own = [s for s in by_shape[k.shape_key] if s is not k and s.kind == "paragraph" and s.words <= 6]
+        for s in own:
+            s.reason = "kpi_label"
+        if own:
             continue
-        for k in kpis:
-            if k.slide == e.slide and (
-                k.shape_key == e.shape_key
-                or (vertical_gap(k.bbox, e.bbox) <= gap and x_overlap_ratio(k.bbox, e.bbox) >= 0.5)
-            ):
+        near = [
+            e for e in by_slide[k.slide]
+            if e.kind == "paragraph" and e.shape_key != k.shape_key and e.words <= 6
+            and e.reason != "kpi_label"
+            and vertical_gap(k.bbox, e.bbox) <= gap and x_overlap_ratio(k.bbox, e.bbox) >= 0.5
+        ]
+        if near:
+            e = min(near, key=lambda e: vertical_gap(k.bbox, e.bbox))
+            if vertical_gap(k.bbox, e.bbox) <= tight or (e.font_size or 0) < baseline_size * cfg.size_ratio:
                 e.reason = "kpi_label"
-                break
 
     def heading_shaped(e: Element) -> bool:
         return (
@@ -172,15 +205,23 @@ def classify(deck: Deck, cfg: Optional[HeadingConfig] = None, arbitrate: Optiona
     # candidates, so that a sub-heading at the top of a continuation slide is not
     # promoted: a style used as a sub-heading elsewhere in the deck is never a title.
     # A slide left without a title continues the previous slide's section (sections.py).
-    zone = deck.slide_height * cfg.fallback_title_zone
-    titled = {e.slide for e in body if e.kind == "title"}
+    # Titles are often full sentences ("Revenue grew 12% as renewals closed early."),
+    # so they get looser length limits than sub-headings and may end with a period.
+    def title_shaped(e: Element) -> bool:
+        return (
+            e.kind == "paragraph"
+            and e.reason != "kpi_label"
+            and 0 < e.words <= cfg.max_title_words
+            and len(e.text) <= cfg.max_title_chars
+        )
+
     picks: dict[int, Element] = {}
     for slide, els in by_slide.items():
         if slide in titled:
             continue
         pool = [
             e for e in els
-            if heading_shaped(e) and e.bbox[1] <= zone and _emphasised(e, baseline_size * 1.07, baseline_bold, cfg)
+            if title_shaped(e) and e.bbox[1] <= zone and _emphasised(e, baseline_size * 1.07, baseline_bold, cfg)
         ]
         if pool:
             picks[slide] = max(pool, key=lambda e: (e.font_size or 0, -e.bbox[1]))
